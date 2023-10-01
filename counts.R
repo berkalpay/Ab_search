@@ -21,18 +21,22 @@ df_agg <-
     filter(total>total_cutoff) %>%
     summarize(median_matches_per_mil=median(matches_per_mil))
 
+total_scale <- function(name) {
+  scale_fill_viridis_c(limits=c(1, max(df$total)), trans="log10",
+                       breaks=c(1, 10, 10^2, 10^3, 10^4, 10^5, 10^6, 5*(10^6)),
+                       labels=c("1", "10", expression(10^2), expression(10^3),
+                                expression(10^4), expression(10^5),
+                                expression(10^6), expression(5%*%10^6)),
+                       name=name)
+}
+
 # Plot the overall data
 p <- ggplot(df, aes(x=bio_rep)) +
   geom_hline(data=df_agg, aes(yintercept=median_matches_per_mil), color="gray") +
   geom_point(shape=21, position=position_dodge(0.5),
              aes(y=matches_per_mil, fill=total, group=tech_rep)) +
   scale_y_continuous(limits=c(0, 100), n.breaks=5) +
-  scale_fill_viridis_c(limits=c(1, max(df$total)), trans="log10",
-                       breaks=c(1, 10, 10^2, 10^3, 10^4, 10^5, 10^6, 5*(10^6)),
-                       labels=c("1", "10", expression(10^2), expression(10^3),
-                                expression(10^4), expression(10^5),
-                                expression(10^6), expression(5%*%10^6)),
-                      name="Total number of reads") +
+  total_scale("Total number of reads") +
   facet_wrap(vars(subject), nrow=2, labeller=as_labeller(function(x) paste("Subject", x))) +
   xlab("Biological replicate") + 
   ylab("VH1-18 QXXV reads per million") +
@@ -54,3 +58,16 @@ print(
               iqr_matches_per_mil=quantile(matches_per_mil, 0.75) - quantile(matches_per_mil, 0.25))
 )
 write_tsv(df_agg, "results/count_medians.tsv")
+
+# Boxplot the overall data together
+set.seed(42)
+ggplot(df, aes(x=0)) +
+  geom_boxplot(data=df %>% filter(total>total_cutoff),
+               aes(y=matches_per_mil), outlier.shape=NA) +
+  geom_jitter(aes(y=matches_per_mil, fill=total), shape=21) +
+  total_scale("Total reads") +
+  ylab("VH1-18 QXXV reads per million") +
+  guides(fill=guide_colourbar(label.position="left")) +
+  theme(legend.key.width=unit(0.25, "in"),
+        axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
+ggsave(paste0("results/counts_boxplot.pdf"), width=3.5, height=3)
